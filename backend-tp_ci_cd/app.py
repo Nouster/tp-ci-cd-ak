@@ -31,6 +31,7 @@ with app.app_context():
     db.create_all()
 
 
+# health route
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "backend"})
@@ -64,4 +65,8 @@ def delete_item(item_id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=os.getenv("FLASK_DEBUG", "false").lower() == "true")
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=os.getenv("FLASK_DEBUG", "false").lower() == "true",
+    )
