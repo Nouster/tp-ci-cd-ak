@@ -32,14 +32,16 @@ tp-ci-cd-ak/
 ├── backend-tp_ci_cd/
 │   ├── app.py                   # Flask REST API
 │   ├── Dockerfile               # Backend container image
+│   ├── requirements.txt         # Service-level requirements (empty, uses root)
 │   └── .dockerignore
 ├── frontend-tp_ci_cd/
 │   ├── app.py                   # Flask web UI
 │   ├── Dockerfile               # Frontend container image
+│   ├── requirements.txt         # Service-level requirements (empty, uses root)
 │   └── .dockerignore
 ├── docker-compose.yml           # Orchestrates all three services
 ├── requirements.txt             # Shared Python dependencies
-└── ReadMe.md
+└── README.md
 ```
 
 ---
@@ -89,19 +91,31 @@ docker compose down -v
 
 Once running:
 
-| Service  | URL                        |
-|----------|----------------------------|
-| Frontend | http://localhost:5001       |
-| Backend  | http://localhost:5000       |
-| MySQL    | localhost:3306             |
+| Service  | URL                  |
+|----------|----------------------|
+| Frontend | http://localhost:5001 |
+| Backend  | http://localhost:5000 |
+| MySQL    | localhost:3306        |
 
 ### With VS Code Dev Container
 
 1. Open the repository folder in VS Code.
 2. When prompted *"Reopen in Container"*, click **Reopen in Container**.  
    Alternatively, open the Command Palette (`Ctrl+Shift+P`) and run **Dev Containers: Reopen in Container**.
-3. VS Code will start all Docker Compose services and attach to the `backend` container.
-4. Port `5001` (frontend) is automatically opened in the browser; ports `5000` and `3306` are forwarded.
+3. VS Code will build all Docker Compose services, attach to the `backend` container, and set the workspace to `/workspace`.
+4. `postCreateCommand` automatically runs `pip install -r /workspace/requirements.txt` inside the container.
+5. Port `5001` (frontend) opens automatically in the browser; ports `5000` (backend) and `3306` (MySQL) are forwarded silently.
+
+#### Installed VS Code Extensions (Dev Container)
+
+| Extension | Purpose |
+|-----------|---------|
+| `ms-python.python` | Python language support |
+| `ms-python.pylint` | Linting |
+| `ms-python.black-formatter` | Code formatting (format on save) |
+| `ms-azuretools.vscode-docker` | Docker integration |
+| `mtxr.sqltools` | Database client |
+| `mtxr.sqltools-driver-mysql` | MySQL driver for SQLTools |
 
 ---
 
@@ -110,20 +124,22 @@ Once running:
 ### Backend
 
 - **Image built from:** `backend-tp_ci_cd/Dockerfile`
+- **Build context:** repository root (`.`)
 - **Port:** `5000`
 - **Entry point:** `backend-tp_ci_cd/app.py`
 
 A Flask REST API that manages `Item` records stored in MySQL. It exposes a health-check endpoint and a full CRUD interface for items. On startup, SQLAlchemy automatically creates the `items` table if it does not exist.
 
-The backend waits for the `db` service to pass its healthcheck before starting, ensuring the database is ready to accept connections.
+The backend waits for the `db` service to pass its health check before starting, ensuring the database is ready to accept connections. The entire repository root is also mounted at `/workspace` inside the container, which the Dev Container configuration relies on.
 
 ### Frontend
 
 - **Image built from:** `frontend-tp_ci_cd/Dockerfile`
+- **Build context:** repository root (`.`)
 - **Port:** `5001`
 - **Entry point:** `frontend-tp_ci_cd/app.py`
 
-A Flask web application that communicates with the backend via HTTP (`requests`). It displays a live list of items, shows the backend health status, and allows users to add or delete items through an HTML form.
+A Flask web application that communicates with the backend via HTTP (`requests`). It renders an inline HTML template that displays a live list of items, shows the backend health status, and lets users add or delete items through an HTML form.
 
 ### Database
 
@@ -131,14 +147,15 @@ A Flask web application that communicates with the backend via HTTP (`requests`)
 - **Port:** `3306`
 - **Credentials (dev):**
 
-  | Parameter | Value        |
-  |-----------|--------------|
-  | Database  | `appdb`      |
-  | User      | `appuser`    |
-  | Password  | `apppassword`|
-  | Root pw   | `rootpassword`|
+  | Parameter | Value          |
+  |-----------|----------------|
+  | Database  | `appdb`        |
+  | User      | `appuser`      |
+  | Password  | `apppassword`  |
+  | Root pw   | `rootpassword` |
 
 - Data is persisted in the named Docker volume `db_data`.
+- A `healthcheck` (`mysqladmin ping`) is configured so dependent services wait until MySQL is ready.
 
 ---
 
@@ -146,18 +163,18 @@ A Flask web application that communicates with the backend via HTTP (`requests`)
 
 ### Backend (`backend` service)
 
-| Variable       | Default                                              | Description                    |
-|----------------|------------------------------------------------------|--------------------------------|
-| `DATABASE_URL` | `mysql+pymysql://appuser:apppassword@db:3306/appdb`  | SQLAlchemy connection string   |
-| `FLASK_DEBUG`  | `true`                                               | Enable Flask debug/reload mode |
+| Variable       | Default                                             | Description                    |
+|----------------|-----------------------------------------------------|--------------------------------|
+| `DATABASE_URL` | `mysql+pymysql://appuser:apppassword@db:3306/appdb` | SQLAlchemy connection string   |
+| `FLASK_DEBUG`  | `true`                                              | Enable Flask debug/reload mode |
 
 ### Frontend (`frontend` service)
 
-| Variable      | Default                  | Description                        |
-|---------------|--------------------------|------------------------------------|
-| `BACKEND_URL` | `http://backend:5000`    | Base URL of the backend API        |
-| `FLASK_DEBUG` | `true`                   | Enable Flask debug/reload mode     |
-| `SECRET_KEY`  | `change-me-in-production`| Flask session secret key           |
+| Variable      | Default                   | Description                    |
+|---------------|---------------------------|--------------------------------|
+| `BACKEND_URL` | `http://backend:5000`     | Base URL of the backend API    |
+| `FLASK_DEBUG` | `true`                    | Enable Flask debug/reload mode |
+| `SECRET_KEY`  | `change-me-in-production` | Flask session secret key       |
 
 > **Note:** Override these values with a `.env` file or by editing `docker-compose.yml` for production deployments.
 
@@ -167,12 +184,12 @@ A Flask web application that communicates with the backend via HTTP (`requests`)
 
 Base URL: `http://localhost:5000`
 
-| Method   | Endpoint              | Description              | Request Body                          |
-|----------|-----------------------|--------------------------|---------------------------------------|
-| `GET`    | `/api/health`         | Health check             | —                                     |
-| `GET`    | `/api/items`          | List all items           | —                                     |
-| `POST`   | `/api/items`          | Create a new item        | `{ "name": "...", "description": "..." }` |
-| `DELETE` | `/api/items/<id>`     | Delete an item by ID     | —                                     |
+| Method   | Endpoint          | Description       | Request Body                              |
+|----------|-------------------|-------------------|-------------------------------------------|
+| `GET`    | `/api/health`     | Health check      | —                                         |
+| `GET`    | `/api/items`      | List all items    | —                                         |
+| `POST`   | `/api/items`      | Create a new item | `{ "name": "...", "description": "..." }` |
+| `DELETE` | `/api/items/<id>` | Delete an item    | —                                         |
 
 #### Example: create an item
 
@@ -192,22 +209,24 @@ curl http://localhost:5000/api/items
 
 ## Dependencies
 
-All Python packages are pinned in the shared [requirements.txt](requirements.txt) and installed into both service images at build time.
+All Python packages are pinned in the root [requirements.txt](requirements.txt) and installed into both service images at build time. The per-service `requirements.txt` files are intentionally empty — the shared root file is mounted/copied into each container.
 
-| Package             | Version  | Purpose                              |
-|---------------------|----------|--------------------------------------|
-| `flask`             | 3.0.3    | Web framework (backend & frontend)   |
-| `flask-sqlalchemy`  | 3.1.1    | ORM / database abstraction layer     |
-| `PyMySQL`           | 1.1.1    | Pure-Python MySQL driver             |
-| `python-dotenv`     | 1.0.1    | Load environment variables from `.env`|
-| `requests`          | 2.31.0   | HTTP client (frontend → backend)     |
-| `cryptography`      | 42.0.5   | Required by PyMySQL for SSL support  |
+| Package            | Version  | Purpose                               |
+|--------------------|----------|---------------------------------------|
+| `flask`            | 3.0.3    | Web framework (backend & frontend)    |
+| `flask-sqlalchemy` | 3.1.1    | ORM / database abstraction layer      |
+| `PyMySQL`          | 1.1.1    | Pure-Python MySQL driver              |
+| `python-dotenv`    | 1.0.1    | Load environment variables from `.env`|
+| `requests`         | 2.31.0   | HTTP client (frontend → backend)      |
+| `cryptography`     | 42.0.5   | Required by PyMySQL for SSL support   |
 
 ---
 
 ## Development Notes
 
 - **Hot reload** — Both service containers mount their source folders as volumes (`./backend-tp_ci_cd:/app` and `./frontend-tp_ci_cd:/app`), so code changes are reflected immediately without rebuilding the image (Flask debug mode handles the reload).
-- **Shared dependencies** — `requirements.txt` is mounted into both containers at `/app/requirements.txt`. Adding a new package there and restarting the container (`docker compose restart backend`) is enough during development.
+- **Shared dependencies** — The root `requirements.txt` is mounted into both containers at `/app/requirements.txt`. Add a new package there and restart the container (`docker compose restart backend`) to pick it up during development.
+- **Dev Container workspace** — The repository root is mounted at `/workspace` inside the `backend` container. The `postCreateCommand` installs dependencies from `/workspace/requirements.txt` after the container is created.
+- **Code formatting** — The Dev Container configures Black as the default Python formatter with format-on-save enabled.
 - **Database reset** — Run `docker compose down -v` to wipe the `db_data` volume and start with a fresh database.
 - **Production checklist** — Before deploying to production, change `SECRET_KEY`, `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, and set `FLASK_DEBUG=false`.
