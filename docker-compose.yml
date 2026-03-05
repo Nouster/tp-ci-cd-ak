@@ -30,6 +30,7 @@ services:
     volumes:
       - ./backend-tp_ci_cd:/app
       - ./requirements.txt:/app/requirements.txt
+      - .:/workspace
     depends_on:
       db:
         condition: service_healthy
