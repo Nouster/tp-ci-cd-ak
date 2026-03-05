@@ -2,7 +2,8 @@
   "name": "TP CI/CD Dev Environment",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "backend",
-  "workspaceFolder": "/app",
+  "runServices": ["db", "backend", "frontend"],
+  "workspaceFolder": "/workspace",
   "forwardPorts": [5000, 5001, 3306],
   "portsAttributes": {
     "5000": { "label": "Backend API", "onAutoForward": "notify" },
@@ -28,6 +29,6 @@
       }
     }
   },
-  "postCreateCommand": "pip install --no-cache-dir -r /app/requirements.txt",
+  "postCreateCommand": "pip install --no-cache-dir -r /workspace/requirements.txt",
   "remoteUser": "root"
 }
